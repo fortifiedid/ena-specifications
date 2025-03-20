@@ -38,7 +38,7 @@
 
     5.1.3. [Token Endpoint](#acg-token-endpoint)
 
-    5.2. [Refresh Token Grant](#Refresh Token Grant)
+    5.2. [Refresh Token Grant](#refresh-token-grant)
 
     5.2.1. [Token Endpoint](#rtg-token-endpoint)
 
@@ -112,7 +112,7 @@ These keywords are capitalized when used to unambiguously specify requirements o
 <a name="acg-token-endpoint"></a>
 #### 5.1.3. Token Endpoint
 
-<a name="Refresh Token Grant"></a>
+<a name="refresh-token-grant"></a>
 ### 5.2. Refresh Token Grant
 
 <a name="rtg-token-endpoint"></a>
