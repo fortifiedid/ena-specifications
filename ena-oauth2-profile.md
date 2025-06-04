@@ -92,6 +92,8 @@ Over the years, numerous extensions and features have been introduced, making �
 
     6.1.1. [The Audience Claim](#the-audience-claim)
 
+    6.1.2. [The Subject Claim](#the-subject-claim)
+
     6.2. [Refresh Tokens](#refresh-tokens)
     
 7. [**Optional Extensions**](#optional-extensions)
@@ -116,9 +118,9 @@ Over the years, numerous extensions and features have been introduced, making �
 
     8.4. [OAuth 2.0 Security Mechanisms](#oauth-20-security-mechanisms)
 
-    8.4.1. [PKCE &mdash; Proof Key for Code Exchange](#pkce-proof-key-for-code-exchange)
+    8.4.1. [PKCE &ndash; Proof Key for Code Exchange](#pkce-proof-key-for-code-exchange)
     
-    8.4.2. [DPoP &mdash; Demonstrating Proof of Possession](#dpop-demonstrating-proof-of-possession)
+    8.4.2. [DPoP &ndash; Demonstrating Proof of Possession](#dpop-demonstrating-proof-of-possession)
 
     8.4.3. [Binding Access Tokens to Client Certificates using Mutual TLS](#binding-access-tokens-to-client-certificates-using-mutual-tls)
 
@@ -133,8 +135,8 @@ Over the years, numerous extensions and features have been introduced, making �
 9. [**Requirements for Interoperability**](#requirements-for-interoperability)
 
     9.1. [Defining and Using Scopes](#defining-and-using-scopes)
-
-    9.2. [Issuing Access Tokens for Multiple Resources](#issuing-access-tokens-for-multiple-resources)
+    
+    9.2. [Using OpenID Connect Identity Scopes](#using-openid-connect-identity-scopes)
 
 10. [**References**](#references)
 
@@ -753,7 +755,7 @@ This profile specifies access tokens only in the form of JWT bearer tokens. This
 
 Note: This section does not specify any requirements regarding "Token introspection", \[[RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)\], as it is out of scope for this profile.
 
-Resource servers compliant with this profile MUST validate JWT access tokens as specified in Section 4 of \[[RFC9068](#rfc9068)\], with the following modifications and clarifications:
+Resource servers compliant with this profile MUST validate JWT access tokens as specified in Section 4 of \[[RFC9068](#rfc9068)\] and Section 3 of \[[RFC8725](#rfc8725)\], with the following modifications and clarifications:
 
 * An access token that is not signed according to the requirements specified in [Section 6.1](#access-tokens) below, MUST be rejected.
 
@@ -805,7 +807,7 @@ If the protected resource is functioning in a multi-domain, or federative, conte
 
 A protected resource MAY support publication of its metadata according to "OAuth 2.0 Protected Resource Metadata", \[[RFC9728](#rfc9728)\].
 
-Whenever feasible, the resource identifier MUST correspond to the network-addressable location of the protected resource &mdash; that is, the URL at which it exposes its service.
+Whenever feasible, the resource identifier SHOULD correspond to the network-addressable location of the protected resource &mdash; that is, the URL at which it exposes its service.
 
 Furthermore, if a resource server hosts multiple resources that do not share the same access rules, it is RECOMMENDED that these resources be treated as separate protected resources, and thus be represented with their own resource identifiers.
 
@@ -1117,16 +1119,125 @@ This following grant types MUST NOT be used or supported by entities compliant w
 <a name="access-tokens"></a>
 ### 6.1. Access Tokens
 
-> TODO: Specify JWT access token format
+This section specifies requirements for JWT access tokens that MUST be adhered to by entities compliant with this profile.
 
-> TODO: If an authorization request includes a scope parameter, the corresponding issued JWT access token MUST include a `scope` claim. Section 2.2.3 of \[[RFC9068](#rfc9068)\].
+An authorization server compliant with this profile MUST issue JWT access tokens according to the requirements specified in Sections 2.1 and 2.2 of \[[RFC9068](#rfc9068)\] with the following additions and clarifications:
 
-- `azp`?
+- The JWT MUST be signed and the authorization server MUST use a signature algorithm known to be supported by the intended audience(s). If no information about the audience's signature preferences exists, a signature algorithm marked as required to support in [Section 8.2, Cryptographic Algorithms](#cryptographic-algorithms) MUST be used.
+
+  - It is RECOMMENDED that the authorization server include the `kid` parameter, uniquely identifying the signature key, in the JWT header. An authorization server that has more than one registered key (see [Section 3.1.1.3, JSON Web Key Set](#as-json-web-key-set)) MUST include a `kid` parameter. 
+  
+- A JWT access token containing sensitive information MAY be encrypted according to \[[RFC7516](#rfc7516)\]. If the access token has multiple audiences, its contents MUST be encrypted for each recipient using the JWE JSON Serialization format, as specified in Section 7.2 of \[[RFC7516](#rfc7516)\].
+
+- The `iss` claim MUST be assigned the value of the authorization server entity identifier as defined in [Section 3.1.1.1](#issuer-the-authorization-server-entity-identifier).
+
+- The `aud` (audience) claim MUST be present and follow the requirements specified in [Section 6.1.1](#the-audience-claim) below.
+
+- The `sub` (subject) claim MUST be present and follow the requirements specified in [Section 6.1.2](#the-subject-claim) below.
+
+- The `client_id` claim MUST be present and be assigned the client identifier as defined in [Section 2.2.1, Client Identifiers](#client-identifiers).
+
+    - Some OAuth 2.0 software makes use of the `azp` claim, as defined by \[[OpenID.Core](#openid-core)\]. If present, its value MUST be the same as the value of the `client_id`.
+
+- If the authorization request or token request included a `scope` parameter, the `scope` claim, as defined in Section 4.2 of \[[RFC8693](#rfc8693)\], MUST be included in the JWT and contain the value(s) of the granted scope(s).<br /><br />The value of the `scope` claim MUST be the same as the value provided in the `scope` parameter of the token response (see [Section 3.3.2.2](#token-responses)).
+
+- The authorization server MAY include authentication information claims, as described in Section 2.2.1 of \[[RFC9068](#rfc9068)\], if the protected resource requires this information to grant access based on the access token.
+
+- The authorization server MAY include identity claims about the resource owner (user) in the JWT. However, an authorization server MUST NOT include identity information in an access token if any of the intended audiences is not authorized to receive that information. This authorization requirement also applies to the client, since it has the ability to access the access token. How this authorization is maintained is out of scope for this profile.<br /><br />Also see [Section 9.2, Using OpenID Connect Identity Scopes](#using-openid-connect-identity-scopes).
+
+- The authorization server MUST limit the inclusion of user identity claims in access tokens to only those claims required by the protected resource to make its access decision.
+
+- An authorization server MAY include the `act` claim, as defined in Section 4.1 of \[[RFC8693](#rfc8693)\], in order to represent delegation and to identify the acting party to whom authority has been delegated.
+
+- An authorization server MAY add additional claims based on local policy or bilateral agreements.
+
+Also see [Section 4.1](#validation-of-access-tokens) for requirements regarding validation of JWT access tokens.
+
+**Example JWT access token:**
+
+Header:
+
+```json
+{
+  "alg": "RS256",
+  "kid": "key-1",
+  "typ": "at+jwt"
+}
+```
+
+Payload:
+
+
+```json
+{
+  "iss": "https://as.example.com",
+  "sub": "user123",
+  "aud": "https://api.example.com",
+  "exp": 1759158000,
+  "iat": 1759154400,
+  "scope": "read write",
+  "client_id": "https://client.example.com",
+  "jti": "a1b2c3d4e5f6"
+}
+```
+
+Compact JWT representation:
+
+```
+eyJhbGciOiJSUzI1NiIsImtpZCI6ImtleS0xIiwidHlwIjoiYXQrand0In0.eyJpc3MiOiJodHRwczovL2FzLm \
+V4YW1wbGUuY29tIiwic3ViIjoidXNlcjEyMyIsImF1ZCI6Imh0dHBzOi8vYXBpLmV4YW1wbGUuY29tIiwiZXhw \
+IjoxNzU5MTU4MDAwLCJpYXQiOjE3NTkxNTQ0MDAsInNjb3BlIjoicmVhZCB3cml0ZSIsImNsaWVudF9pZCI6Im \
+h0dHBzOi8vY2xpZW50LmV4YW1wbGUuY29tIiwianRpIjoiYTFiMmMzZDRlNWY2In0.qce3-7_VNXBongen4_ge \
+5xsFSDCuJBY0VQoxlr3WXopKxhjx7RFIaBJkO5QuK5fUAO_C6bpaIByvEp099JAMERhVqan8ej4DIwp4W2VxRG \
+R4aXHtqr7YS0AjGDKyMwlM7KAmXe4sppv4Rv3EOnoKGvmmfugNPk2Mv8gL8rBGrTjgo5DjOfVo8vdg4rGMm15F \
+6JDXb1tVzSyMZuY-sHMIwoUvfsQ-8JjhFm2w_97sT4ZX6P5E9rrFfVW0y29ysLljJGsczqWDbctecP5NQl2tuJ \
+_z5EsOGpKG1I9LEksRch0bxCKXbOUUOFREBuxX9NUjqBenUeP91J2TDMDEQ6EHxQ
+```
+
+
+Extended example of the payload where the authorization server includes authentication information (the authentication context class and user authentication time), and a Swedish personal identity number for the subject (user):
+
+```json
+{
+  "iss": "https://as.example.com",
+  "sub": "user123",
+  "aud": "https://api.example.com",
+  "exp": 1759158000,
+  "iat": 1759154400,
+  "scope": "read write",
+  "client_id": "https://client.example.com",
+  "jti": "a1b2c3d4e5f6"
+  "auth_time": "1759154340",
+  "acr": "http://id.elegnamnden.se/loa/1.0/loa3",
+  "https://id.oidc.se/claim/personalIdentityNumber": "198509276112" 
+}
+```
 
 <a name="the-audience-claim"></a>
 #### 6.1.1. The Audience Claim
 
-> About `aud`: the resource server should assume its resource identifier, but should also be able to handle aud-values that map directly to the invoked URL (if different from the resource identifier).
+The `aud` (audience) claim is essential for limiting an access token's use to one, or possibly a set of, protected resource(s). 
+
+In order to avoid leaking potentially sensible information an authorization server MUST restrict the number of audiences for an access token to a minimum.
+
+For each protected resource for which the access token is intended, the authorization server MUST include the resource identifier for this resource among the audience values, see [Section 4.3, Protected Resource Identity and Registration](#protected-resource-identity-and-registration).
+
+In order to support legacy deployments, an authorization server MAY include alternative representations of a protected resource as audience values.
+
+If several audience values are given in the `aud` claim, all protected resources indicated MUST share the same access configuration at the authorization server, meaning they have the same requirements for access based on scopes and possibly other claims included in the access token.
+
+<a name="the-subject-claim"></a>
+#### 6.1.2. The Subject Claim
+
+In cases where an access token is obtained through a grant where no resource owner is involved, such as the [Client Credentials Grant](#client-credentials-grant), the `sub` claim SHOULD be assigned the same value as the `client_id`. This requirement MAY be overridden if the protected resource has a different way to identify a client application than its registered identity.
+
+An access token obtained through a grant where no resource owner is involved MUST NOT assign the `sub` claim to the identity of a physical individual. However, if a resource owner (user) has authorized an application in advance, the access token MAY include identity claims for that user. How this is accomplished is out of scope for this profile. 
+
+In cases where access tokens are obtained through grants involving a resource owner, such as the [Authorization Code Grant](#authorization-code-grant), the `sub` claim MUST be assigned an identifier that represents the resource owner (user).
+
+An authorization server MUST ensure that the protected resource(s) receiving the access token are authorized to receive the identity information contained in the `sub` claim. For example, if a protected resource is not authorized to receive a user's Swedish personal identity number, that identity MUST NOT be used as the `sub` claim.
+
+For user integrity reasons, it is RECOMMENDED that authorization servers choose a persistent identifier that does not reveal any personal identity information about the resource owner as the `sub` value, and extend the access token with authorized identity claims for the resource owner (if needed).
 
 <a name="refresh-tokens"></a>
 ### 6.2. Refresh Tokens
@@ -1291,7 +1402,7 @@ The sender of a secure message MUST NOT use an algorithm that is not set as REQU
 ### 8.4. OAuth 2.0 Security Mechanisms
 
 <a name="pkce-proof-key-for-code-exchange"></a>
-#### 8.4.1. PKCE &mdash; Proof Key for Code Exchange
+#### 8.4.1. PKCE &ndash; Proof Key for Code Exchange
 
 Proof Key for Code Exchange (PKCE) is defined in \[[RFC7636](#rfc7636)\]. It t was originally designed to protect native applications from authorization code exfiltration attacks, but it is also used as a countermeasure against "Authorization Code Injection" attacks, see [Section 8.5.1](#injection-of-authorization-code), below.
 
@@ -1314,7 +1425,7 @@ An authorization server receiving a token request where grant_type is `authoriza
 Finally, an authorization server receiving an access token request MUST verify the supplied `code_verifier` according to Section 4.6 of \[[RFC7636](#rfc7636)\].
 
 <a name="dpop-demonstrating-proof-of-possession"></a>
-#### 8.4.2. DPoP &mdash; Demonstrating Proof of Possession
+#### 8.4.2. DPoP &ndash; Demonstrating Proof of Possession
 
 For deployments that make use of the DPoP (Demonstrating Proof of Possession) mechanism as specified in \[[RFC9449](#rfc9449)\], this profile introduces the following clarifications and additions:
 
@@ -1435,10 +1546,52 @@ An authorization server MAY choose to map a unique scope to a different scope va
 
 However, if the protected resource implements “OAuth 2.0 Protected Resource Metadata”, \[[RFC9728](#rfc9728)\], scope mapping in the authorization server SHOULD NOT be performed. In such cases, the `scopes_supported` parameter in the protected resource metadata would not align with the actual scopes used by clients, leading to inconsistency and potential interoperability issues.
 
-<a name="issuing-access-tokens-for-multiple-resources"></a>
-### 9.2. Issuing Access Tokens for Multiple Resources
+<a name="using-openid-connect-identity-scopes"></a>
+### 9.2. Using OpenID Connect Identity Scopes
 
-> TODO: Discuss using "wide" access tokens with multiple audiences vs. using audience values mapping to shared identifiers.
+Scopes are used somewhat differently in OAuth 2.0 and OpenID Connect. In the OAuth world, a scope represents a "right", whereas in OpenID Connect, many scopes determine which information about an authenticated user is released.
+
+In OAuth 2.0 deployments, access tokens obtained from an authorization server and passed to a protected resource may contain a set of identity claims about the resource owner. The inclusion of such claims may be required by the protected resource in order to perform its access decision. Which identity claims to include in an access token for a particular resource is generally determined by configuration at the authorization server.
+
+By using OpenID Connect identity scopes, a client can dynamically request that a specific set of identity claims be included in the access token. For example, assume that a client wishes to obtain an access token to call a protected resource that requires a Swedish personal identity number to be included in the token. The client could then include the scope `https://id.oidc.se/scope/naturalPersonNumber`, as defined by \[[OIDC.Sweden.Claims](#oidc-claims)\], in the authorization request.
+
+```
+GET /authorize?
+  response_type=code&
+  client_id=https%3A%2F%2Fclient.example.com&
+  redirect_uri=https%3A%2F%2Fclient.example.com%2Fcallback&
+  code_challenge=0x7Yt0nFnvGp4Af3GtrR7H8yWVD3ysKvl9P8z9vbYhME&
+  code_challenge_method=S256&
+  state=Z3k8MvB9QJzEr7a6X2Wa&
+  scope=read%20https%3A%2F%2id.oidc.se%2Fscope%2FnaturalPersonNumber
+HTTP/1.1
+Host: as.example.com
+```
+
+> The `read` scope is requested along with the special-purpose `https://id.oidc.se/scope/naturalPersonNumber` scope.
+
+The resulting JWT access token may then look something like this:
+
+```json
+{
+  "iss": "https://as.example.com",
+  "sub": "user123",
+  "aud": "https://api.example.com",
+  "exp": 1759158000,
+  "iat": 1759154400,
+  "scope": "read https://id.oidc.se/scope/naturalPersonNumber",
+  "client_id": "https://client.example.com",
+  "jti": "a1b2c3d4e5f6"
+  "https://id.oidc.se/claim/personalIdentityNumber": "198509276112" 
+}
+```
+
+> The `https://id.oidc.se/claim/personalIdentityNumber` claim is included in the access token since the client requested the `https://id.oidc.se/scope/naturalPersonNumber`. See Section 3.2 of \[[OIDC.Sweden.Claims](#oidc-claims)\] for a definition of this scope.
+
+Note that the requirement stated in [Section 6.1, Access Tokens](#access-tokens), that a protected resource must be authorized to receive a specific identity claim, still applies.
+
+The feature of supporting OpenID Connect scope values in OAuth 2.0 authorization requests is OPTIONAL to support. However, for authorization servers that also function as OpenID Providers and support the Swedish OpenID Connect Profile \[[OIDC.Sweden.Profile](#oidc-profile)\], support is RECOMMENDED.
+
 
 <a name="references"></a>
 ## 10. References
@@ -1474,6 +1627,10 @@ However, if the protected resource implements “OAuth 2.0 Protected Resource Me
 **\[RFC7591\]**
 > [Richer, J., Ed., Jones, M., Bradley, J., Machulak, M., and P. Hunt, "OAuth 2.0 Dynamic Client Registration Protocol", RFC 7591, DOI 10.17487/RFC7591, July 2015](https://www.rfc-editor.org/info/rfc7591).
 
+<a name="rfc7516"></a>  
+**\[RFC7516\]**  
+> [Jones, M., "JSON Web Encryption (JWE)", RFC 7516, DOI 10.17487/RFC7516, May 2015](https://www.rfc-editor.org/info/rfc7516).
+
 <a name="rfc7517"></a>
 **\[RFC7517\]**
 > [Jones, M., "JSON Web Key (JWK)", RFC 7517, DOI 10.17487/RFC7517, May 2015](http://www.rfc-editor.org/info/rfc7517).
@@ -1502,6 +1659,10 @@ However, if the protected resource implements “OAuth 2.0 Protected Resource Me
 **\[RFC8615\]**
 > [Nottingham, M., "Well-Known Uniform Resource Identifiers (URIs)", RFC 8615, May 2019](https://datatracker.ietf.org/doc/html/rfc8615).
 
+<a name="rfc8693"></a>
+**\[RFC8693\]**
+> [Jones, M., Campbell, B., and D. Waite, "OAuth 2.0 Token Exchange", RFC 8693, DOI 10.17487/RFC8693, January 2020](https://www.rfc-editor.org/info/rfc8693).
+
 <a name="rfc8705"></a>
 **\[RFC8705\]**
 > [Campbell, B., Bradley, J., Sakimura, N., and T. Lodderstedt, "OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens", RFC 8705, DOI 10.17487/RFC8705, February 2020](https://www.rfc-editor.org/info/rfc8705).
@@ -1509,6 +1670,10 @@ However, if the protected resource implements “OAuth 2.0 Protected Resource Me
 <a name="rfc8707"></a>
 **\[RFC8707\]**
 > [Campbell, B., Bradley, J., and H. Tschofenig, "Resource Indicators for OAuth 2.0", RFC 8707, DOI 10.17487/RFC8707, February 2020](https://datatracker.ietf.org/doc/html/rfc8707).
+
+<a name="rfc8725"></a>
+**\[RFC8725\]**
+> [Sheffer, Y., Hardt, D., and M. Jones, "JSON Web Token Best Current Practices", RFC 8725, DOI 10.17487/RFC8725, June 2020](https://www.rfc-editor.org/info/rfc8725).
 
 <a name="rfc9068"></a>
 **\[RFC9068\]**
@@ -1558,6 +1723,10 @@ However, if the protected resource implements “OAuth 2.0 Protected Resource Me
 **\[OIDC.Sweden.Parameters\]**
 > [Authentication Request Parameter Extensions for the Swedish OpenID Connect Profile - Version 1.1](https://www.oidc.se/specifications/request-parameter-extensions.html).
 
+<a name="oidc-claims"></a>
+**\[OIDC.Sweden.Claims\]**
+> [Claims and Scopes Specification for the Swedish OpenID Connect Profile - Version 1.0](https://www.oidc.se/specifications/swedish-oidc-claims-specification.html).
+
 <a name="openid-discovery"></a>
 **\[OpenID.Discovery\]**
 > [Sakimura, N., Bradley, J., Jones, M., and E. Jay, "OpenID Connect Discovery 1.0 incorporating errata set 2", December 2023](https://openid.net/specs/openid-connect-discovery-1_0.html).
@@ -1576,6 +1745,10 @@ However, if the protected resource implements “OAuth 2.0 Protected Resource Me
 <a name="oauth-id-chaining"></a>
 **\[OAuth.ID-Chaining\]**
 > [Schwenkschuster, A., Kasselmann, P., Burgin, K., Jenkins, M., Campbell, B., "OAuth Identity and Authorization Chaining Across Domains", Draft 4, February 2025](https://datatracker.ietf.org/doc/draft-ietf-oauth-identity-chaining/).
+
+<a name="openid-core"></a>
+**\[OpenID.Core\]**
+> [Sakimura, N., Bradley, J., Jones, M., de Medeiros, B. and C. Mortimore, "OpenID Connect Core 1.0", August 2015](https://openid.net/specs/openid-connect-core-1_0.html).
 
 <a name="openid-discovery"></a>
 **\[OpenID.Discovery\]**
