@@ -2,7 +2,7 @@
 
 # Ena OAuth 2.0 Interoperability Profile
 
-### Version: 1.0 - draft 01 - 2025-06-04
+### Version: 1.0 - draft 01 - 2025-06-09
 
 ## Abstract
 
@@ -1384,23 +1384,86 @@ The sender of a secure message MUST NOT use an algorithm that is not set as REQU
 <a name="client-authentication"></a>
 ### 8.3. Client Authentication
 
+Authorization servers compliant with this profile MUST support the `private_key_jwt` client authentication mechanism, as specified in [Section 8.3.1](#signed-jwt-for-client-authentication) below, and MAY support mutual TLS client authentication, as specified in [Section 8.3.2](#mutual-tls-for-client-authentication). Other client authentication mechanisms MUST NOT be accepted.
+
 <a name="signed-jwt-for-client-authentication"></a>
 #### 8.3.1. Signed JWT for Client Authentication
 
-> `private_key_jwt`, RFC7523
+The `private_key_jwt` mechanism is defined in Sections 2 and 3 of \[[RFC7523](#rfc7523)\]. Entities compliant with this profile MUST adhere to these sections, with the following additions and clarifications:
 
-> In Section 3.2 of [RFC7523] (Client Authentication Processing), the following requirement is added:
+- The JWT MUST be digitally signed by the issuer (i.e., the client). The authorization server MUST reject JWTs with an invalid or missing signature. The client MUST use a signature algorithm supported by the authorization server. See [Section 3.1.1.7, Supported Authentication Signing Algorithms for Endpoints](#supported-authentication-signing-algorithms-for-endpoints).
 
-> Client authentication JWTs MUST be explicitly typed by using the typ header parameter value client-authentication+jwt another more specific explicit type value defined by a specification profiling this specification. Client authentication JWTs not using the explicit type value MUST be rejected by the authorization server.
+- It is RECOMMENDED that the client includes the `kid` parameter in the JWT header to uniquely identify the signing key. If the client has several keys registered (see [Section 2.2.2.4](#json-web-key-set)), the `kid` parameter MUST be present.
 
-> TODO: Only one audience value must be present.
+- Unless overridden by a policy exception for legacy deployments, client authentication JWTs MUST include an explicit type by setting the `typ` JWT header parameter to `client-authentication+jwt`, or to another more specific type value defined by a policy or profile. If a client authentication JWT does not include such an explicit type value, the authorization server MUST reject it. This requirement helps prevent the replay of other JWTs signed by the client as client authentication JWTs.
+
+- The `iss` claim of the JWT MUST be assigned the client identifier, as specified in [Section 2.2.1, Client Identifiers](#client-identifiers).
+
+- The `sub` claim of the JWT MUST be equal to the `iss` claim, i.e., the `client_id` of the client.
+
+- The JWT MUST contain an `aud` (audience) claim with the authorization server identifier (see [Section 3.1.1.1](#issuer-the-authorization-server-entity-identifier)) as its only value. An authorization server processing a JWT that includes multiple audience values MUST reject it.
+
+- Unless overridden by a local policy, the `jti` (JWT ID) MUST be included in the JWT and the authorization server MUST ensure that client authentication JWTs are not replayed by caching a collection of used `jti` values for the time the JWT would be considered valid.
+
+- The lifetime of the JWT, controlled by the `exp` claim, MUST be as short as possible (ranging from seconds to a few minutes). The authorization server MUST enforce a maximum allowed value, which may override the lifetime specified by the client.
+
+- The JWT MAY contain other claims than those specified in Section 3 of \[[RFC7523](#rfc7523)\].
+
+Example of a signed JWT used by `https://client.example.com` to authenticate to the authorization server `https://as.example.com`:
+
+Header:
+
+```json
+{
+  "alg": "RS256",
+  "typ": "client-authentication+jwt",
+  "kid": "key-12345"
+}
+```
+
+Payload:
+
+```json
+{
+  "iss": "https://client.example.com",
+  "sub": "https://client.example.com",
+  "aud": "https://as.example.com",
+  "exp": 1759654860,
+  "nbf": 1759654800,
+  "iat": 1759654800,
+  "jti": "e3d1f2b4-6ac0-4d84-b9f2-7e8e028b1234"
+}
+```
+
+See [Section 3.3.2.1, Token Requests](#token-requests) for an example where `private_key_jwt` is used to authenticate a client's request to the authorization server's token endpoint.
 
 <a name="mutual-tls-for-client-authentication"></a>
 #### 8.3.2. Mutual TLS for Client Authentication
 
-> RFC8705
+\[[RFC8705](#rfc8705)\] defines the `tls_client_auth` and `self_signed_tls_client_auth` client authentication methods. Entities compliant with this profile MAY support these methods according to \[[RFC8705](#rfc8705)\], along with the clarifications and additions stated below:
 
-`tls_client_auth` or `self_signed_tls_client_auth`.
+Authorization servers supporting the `tls_client_auth` method SHOULD limit the accepted PKI trust to a single root CA certificate, i.e., only accept client certificates from one PKI. The reason for this is that if the authorization server accepts a large number of certificate issuers, an attacker's chances of obtaining a perfectly legitimate certificate that has the same subject DN (or any other certificate subject name) for an already registered client increases. See Section 2.1.2 of \[[RFC8705](#rfc8705)\].
+
+Since an authorization server compliant with this profile MUST support the `private_key_jwt` client authentication method (see [Section 8.3.1](#signed-jwt-for-client-authentication) above), the use of mTLS endpoint aliases as specified in Section 5 of \[[RFC8705](#rfc8705)\] is RECOMMENDED. This facilitates a more robust endpoint configuration at the authorization server and avoids having to configure web servers with complex TLS rules where mTLS is optional, since `private_key_jwt` does not require mTLS.
+
+Example of authorization server metadata:
+
+```json
+{
+  "issuer": "https://as.example.com",
+  "authorization_endpoint": "https://as.example.com/authz",
+  "token_endpoint": "https://as.example.com/token",
+  ...
+  "token_endpoint_auth_methods_supported": ["private_key_jwt", "tls_client_auth"],
+  "mtls_endpoint_aliases": {
+    "token_endpoint": "https://as-mtls.example.com/token"
+  }
+}
+``` 
+
+This illustrates that the authorization server has two token endpoints: one used for `private_key_jwt` authentication, and one configured for mutual TLS, used for the `tls_client_auth` method.
+
+**Note:** Since an OAuth 2.0 client can only register one client authentication method (see [Section 2.2.2.2, Token Endpoint Authentication Method](#token-endpoint-authentication-method)), an authorization server MAY, instead of using mTLS endpoint aliases, supply different metadata documents to clients based on their registered authentication methods. How this could be implemented and realized is out of scope for this profile.
 
 <a name="oauth-20-security-mechanisms"></a>
 ### 8.4. OAuth 2.0 Security Mechanisms
