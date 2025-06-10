@@ -12,7 +12,7 @@ This repository contains OAuth 2.0 profiles and specifications developed by the 
 
 Below is a listing of profiles and documents that will be produced by the Ena Infrastructure working group.
 
-- Ena OAuth 2.0 Cookbook &mdash; An informational document that illustrates common OAuth 2.0 use cases with recipies on how to send requests, process responses, and handle access tokens.
+- Ena OAuth 2.0 Cookbook &mdash; An informational document that illustrates common OAuth 2.0 use cases with recipes for how to send requests, process responses, and handle access tokens.
 
 - [Ena OAuth 2.0 Federation Interoperability Profile](ena-oauth2-federation.md) &mdash; Historically, OAuth 2.0 has been used in a non-federative way, where clients register with authorization servers either manually or via a registration protocol. As a result of the emergence of the [OpenID Federation](https://openid.net/specs/openid-federation-1_0.html), it will be possible to use OAuth 2.0 entities in a federative way, where client metadata may be resolved by an authorization server at runtime, or where an authorization server’s decisions may be based on metadata such as trust marks.<br /><br />This document profiles how OAuth 2.0 entities should join and operate within a federation according to the [OpenID Federation](https://openid.net/specs/openid-federation-1_0.html) standard.
 
