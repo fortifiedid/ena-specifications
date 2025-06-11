@@ -2,7 +2,7 @@
 
 # Ena OAuth 2.0 Interoperability Profile
 
-### Version: 1.0 - draft 01 - 2025-06-09
+### Version: 1.0 - draft 01 - 2025-06-10
 
 ## Abstract
 
@@ -129,6 +129,10 @@ Over the years, numerous extensions and features have been introduced, making �
     8.5.2. [Token Theft and Leakage](#token-theft-and-leakage)
     
     8.5.3. [Authorization Server Mix-Up Attacks](#authorization-server-mix-up-attacks)
+    
+    8.5.4. [Insufficient Validation of Redirect URIs](#insufficient-validation-of-redirect-uris)
+
+    8.5.5. [Open Redirects](#open-redirects)
 
 9. [**Requirements for Interoperability**](#requirements-for-interoperability)
 
@@ -235,6 +239,8 @@ Every client compliant with the profile MUST be identified by a globally unique 
 
 A client registered with multiple authorization servers MUST use the same client identifier (`client_id`) for all registrations. This implies that an authorization server compliant with this profile MUST support clients with client identifiers issued by external parties.
 
+A client identifier MUST NOT be assigned if its value may be mistaken for the identity of a resource owner (see Section 4.15 of \[[RFC9700](#rfc9700)\]). Since this profile dictates that client identifiers must be URLs, the risk of mistaking a client identifier for a resource owner identity is low, but authorization servers MUST still ensure that the namespaces used for subject names (`sub` claim and potentially other user identity claims) and client identifiers do not interfere.
+
 <a name="client-registration-metadata"></a>
 #### 2.2.2. Client Registration Metadata
 
@@ -255,7 +261,7 @@ The redirect URIs provided MUST be absolute URIs, as defined in Section 4.3 of \
 
 Redirect URIs MUST be one of the following:
 
-- An HTTPS URL,
+- An HTTPS URL without any wildcards,
 
 - a client-specific URI scheme (provided the requirements for confidential clients apply to a mobile app and that the scheme identifies a protocol that is not for remote access),
 
@@ -263,7 +269,7 @@ Redirect URIs MUST be one of the following:
 
 If more than one redirect URI is provided, different domains SHOULD NOT be used.
 
-> TODO: Add reference to security chapter where attacks concerning redirects are listed.
+See also [Section 8.5.4, Insufficient Validation of Redirect URIs](#insufficient-validation-of-redirect-uris).
 
 <a name="token-endpoint-authentication-method"></a>
 ##### 2.2.2.2. Token Endpoint Authentication Method
@@ -1487,7 +1493,7 @@ This illustrates that the authorization server has two token endpoints: one used
 <a name="pkce-proof-key-for-code-exchange"></a>
 #### 8.4.1. PKCE &ndash; Proof Key for Code Exchange
 
-Proof Key for Code Exchange (PKCE) is defined in \[[RFC7636](#rfc7636)\]. It t was originally designed to protect native applications from authorization code exfiltration attacks, but it is also used as a countermeasure against "Authorization Code Injection" attacks, see [Section 8.5.1](#injection-of-authorization-code), below.
+Proof Key for Code Exchange (PKCE) is defined in \[[RFC7636](#rfc7636)\]. It was originally designed to protect native applications from authorization code exfiltration attacks, but it is also used as a countermeasure against "Authorization Code Injection" attacks (see [Section 8.5.1](#injection-of-authorization-code), below) and Cross-Site Request Forgery (CSRF) (see Section 4.7 of \[[RFC9700](#rfc9700)\]).
 
 The use of PKCE with the authorization code grant is REQUIRED by this profile.
 
@@ -1556,6 +1562,17 @@ How a client determines whether a protected resource that does not expose its me
 
 Entities compliant with this profile MUST be aware of and implement countermeasures against relevant threats described in "OAuth 2.0 Security Best Current Practice" \[[RFC9700](#rfc9700)\]. This section highlights a selection of those threats that warrant particular attention due to the security requirements defined in this profile. 
 
+Furthermore, this section does not explicitly discuss threats and vulnerabilities for OAuth 2.0 entities that arise from poor or uninformed implementations and deployments. \[[RFC9700](#rfc9700)\] provides a few examples, such as the use of the 307 HTTP status code (instead of 303) for redirects, or a poorly configured reverse proxy that allows an attacker to supply header values that are normally created by the proxy.
+
+It is expected that implementors and deployment engineers wishing to adhere to this profile not only study and follow \[[RFC9700](#rfc9700)\], but also read, understand, and follow:
+
+- OWASP, "OWASP Top 10 - 2021: The Ten Most Critical Web Application Security Risks", \[[OWASP.Top10](#owasp-top10)\]
+
+- OWASP, "OAuth 2.0 Security Cheat Sheet", OWASP Cheat Sheet Series, \[[OWASP.OAuth2](#owasp-oauth2-cheatsheet)\]
+
+- OWASP, "Authorization Cheat Sheet", OWASP Cheat Sheet Series, \[[OWASP.Authorization](#owasp-authz-cheatsheet)\].
+ 
+
 <a name="injection-of-authorization-code"></a>
 #### 8.5.1. Injection of Authorization Code
 
@@ -1563,7 +1580,7 @@ Section 4.5 of \[[RFC9700](#rfc9700)\] describes the Authorization Code Injectio
 
 The countermeasure against this attack is to always require PKCE. See [Section 8.4.1, PKCE - Proof Key for Code Exchange](#pkce-proof-key-for-code-exchange). This involves using the `code_challenge` parameter in authorization requests and the corresponding `code_verifier` parameter in token requests.
 
-> **Note:** This threat and its countermeasure apply only when the authorization code grant is used.
+**Note:** This threat and its countermeasure apply only when the authorization code grant is used.
 
 <a name="token-theft-and-leakage"></a>
 #### 8.5.2. Token Theft and Leakage
@@ -1573,15 +1590,47 @@ Access tokens can be stolen in several ways. Some of these attacks are described
 To mitigate these types of attacks, this profile specifies the following requirements:
 
 - All access tokens MUST be audience-restricted as specified in [Section 6.1, Access Tokens](#access-tokens), and protected resources MUST validate this restriction in accordance with [Section 4.1, Validation of Access Tokens](#validation-of-access-tokens).
+
+- Protected resources MUST treat received access tokens as sensitive secrets, and MUST NOT store them in plaintext.
     
 - In deployments where any of the above threats are relevant, it is RECOMMENDED that access tokens be sender-constrained using DPoP \[[RFC9449](#rfc9449)\], or alternatively, Mutual TLS \[[RFC8705](#rfc8705)\]. For details, see [Section 8.4.2, DPoP - Demonstrating Proof of Possession](#dpop-demonstrating-proof-of-possession) and [Section 8.4.3, Binding Access Tokens to Client Certificates using Mutual TLS](#binding-access-tokens-to-client-certificates-using-mutual-tls).
 
-> **Note:** This profile is intended for general-purpose use and therefore does not mandate sender-constrained access tokens. However, profiles targeting high-security deployments that build upon this profile may choose to require sender-constrained tokens as a mandatory feature.
+**Note:** This profile is intended for general-purpose use and therefore does not mandate sender-constrained access tokens. However, profiles targeting high-security deployments that build upon this profile may choose to require sender-constrained tokens as a mandatory feature.
 
 <a name="authorization-server-mix-up-attacks"></a>
 #### 8.5.3. Authorization Server Mix-Up Attacks
 
-7.13
+If an OAuth 2.0 client is configured to use more than one authorization server, the client may be at risk if any of the authorization servers it interacts with has been compromised by an attacker.
+
+Section 4.4.1 of \[[RFC9700](#rfc9700)\] describes this attack in detail, but in short, the attacker exploits a situation where a client interacts with multiple authorization servers and does not properly verify which authorization server issued a given authorization response. The attack may proceed as follows:
+
+- The attacker tricks a client into initiating an authorization request to a malicious or unintended authorization server.
+
+- The malicious authorization server then forwards the client to a legitimate authorization server, which performs user authentication and issues an authorization code.
+
+- The malicious authorization server intercepts this legitimate response and passes it back to the client in a context where the client mistakenly believes the response came from the malicious authorization server.
+
+- As a result, the client uses the legitimate authorization server-issued code in requests to the malicious authorization server, potentially exposing sensitive tokens or user information to the attacker.
+
+To defend against these types of attacks, a client compliant with this profile MUST, for each authorization request, store the identifier of the authorization server to which the request was sent, and bind this information to the user agent. Using the authorization server metadata, the client can then determine which authorization endpoint and token endpoint are to be used in the flow.
+
+Also, an authorization server compliant with this profile SHOULD include the `iss` parameter, as defined by \[[RFC9207](#rfc9207)\], in authorization responses, and the client SHOULD process it according to \[[RFC9207](#rfc9207)\], see [Section 5.1.2, Authorization Responses](#authorization-responses).
+
+<a name="insufficient-validation-of-redirect-uris"></a>
+#### 8.5.4. Insufficient Validation of Redirect URIs
+
+Section 4.1 of \[[RFC9700](#rfc9700)\] describes attacks concerning the misuse of a client's redirect URIs. To mitigate any of the threats described therein, an authorization server MUST NOT allow a client to register redirect URI patterns (i.e., use wildcards in the URI).
+
+See also [Section 2.2.2.1, Redirect URIs](#redirect-uris).
+
+<a name="open-redirects"></a>
+#### 8.5.5. Open Redirects
+
+An open redirector is a web application vulnerability where a URL parameter is used to redirect users to another website, but the destination is not properly validated. This allows attackers to craft URLs that appear to lead to a trusted site but actually redirect users to malicious sites. Open redirectors are often used in phishing attacks to trick users into revealing credentials or downloading malware, leveraging the credibility of the original domain to bypass suspicion.
+
+OAuth 2.0-related open redirector attacks are described in Section 4.11 of \[[RFC9700](#rfc9700)\]. To prevent an authorization server from being used as an open redirector, authorization servers compliant with this profile MUST adhere to the countermeasures given in Section 4.11.2 of \[[RFC9700](#rfc9700)\].
+
+Client implementations are expected to follow the countermeasures against open redirects as described in \[[OWASP.Redirect](#owasp-redirect-cheatsheet)\].
 
 <a name="requirements-for-interoperability"></a>
 ## 9. Requirements for Interoperability 
@@ -1848,6 +1897,24 @@ The feature of supporting OpenID Connect scope values in OAuth 2.0 authorization
 <a name="audience-injection"></a>
 **\[Audience.Injection\]**
 > [Hosseyni, P., Küsters, R., and T. Würtele, "Audience Injection Attacks: A New Class of Attacks on Web-Based Authorization and Authentication Standards", Cryptology ePrint Archive Paper 2025/629, April 2025](https://eprint.iacr.org/2025/629).
+
+<a name="owasp-top10"></a>
+**\[OWASP.Top10\]**
+> [OWASP, "OWASP Top 10 - 2021: The Ten Most Critical Web Application Security Risks", OWASP Foundation](https://owasp.org/Top10/).
+
+<a name="owasp-oauth2-cheatsheet"></a>
+**\[OWASP.OAuth2\]**
+> [OWASP, "OAuth 2.0 Security Cheat Sheet", OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html).
+
+<a name="owasp-authz-cheatsheet"></a>
+**\[OWASP.Authorization\]**  
+> [OWASP, "Authorization Cheat Sheet", OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html).
+
+<a name="owasp-redirect-cheatsheet"></a>
+**\[OWASP.Redirect\]**
+> [OWASP Foundation, "Unvalidated Redirects and Forwards Cheat Sheet", OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html).
+
+
 
  
 
