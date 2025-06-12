@@ -308,8 +308,15 @@ To facilitate a smooth key rollover, each JWK of the referenced document SHOULD 
 
 The JWKs provided in the key set MUST adhere to the requirements put in [Section 8.2, Cryptographic Algorithms](#cryptographic-algorithms), below.
 
+<a name="client-scopes"></a>
+##### 2.2.2.5. Scopes
+
+**Metadata parameter:** `scope`
+
+The `scope` parameter is a space-separated list of scope values that the client can use when requesting access tokens.
+
 <a name="human-readable-client-metadata"></a>
-##### 2.2.2.5. Human-readable Client Metadata
+##### 2.2.2.6. Human-readable Client Metadata
 
 Client metadata values intended for human consumption, either directly or via reference (URIs), SHOULD be provided in both English and Swedish using language tags according to BCP 47, \[[RFC5646](#rfc5646)\].
 
@@ -332,7 +339,7 @@ Examples:
 For further requirements see Section 2.2 of \[[RFC7591](#rfc7591)\].
 
 <a name="client-md-extensions"></a>
-##### 2.2.2.6. Extensions
+##### 2.2.2.7. Extensions
 
 This section contains metadata parameters for optional OAuth 2.0 extensions that MAY be supported by a client.
 
