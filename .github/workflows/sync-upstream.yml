@@ -2,7 +2,7 @@ name: Sync ena-specifications from upstream (daily)
 
 on:
   schedule:
-    - cron: "0 3 * * *"   # en gång per dag (UTC)
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -10,10 +10,9 @@ permissions:
 
 jobs:
   sync-ena-specifications:
-    name: Sync ena-specifications
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout fork (ena-specifications)
+      - name: Checkout fork
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -24,25 +23,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Add upstream (ena-infrastructure/specifications)
+      - name: Add upstream
         run: |
           git remote add upstream https://github.com/ena-infrastructure/specifications.git || true
 
-      - name: Detect default branch
-        id: def
+      - name: Sync main branch
         run: |
-          BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@')
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-
-      - name: Rebase from upstream
-        run: |
-          BRANCH="${{ steps.def.outputs.branch }}"
-          git checkout "$BRANCH"
-          git fetch upstream "$BRANCH"
-          git fetch origin "$BRANCH"
-          git rebase "upstream/$BRANCH"
-
-      - name: Push to fork (ena-specifications)
-        run: |
-          BRANCH="${{ steps.def.outputs.branch }}"
-          git push origin "$BRANCH" --force-with-lease
+          git checkout main
+          git fetch upstream main
+          git rebase upstream/main
+          git push origin main --force-with-lease
